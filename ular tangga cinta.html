@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game Ular Tangga LDR dengan Pion</title>
+<style>
+  body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f8e9f0;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    color: #5a2a48;
+  }
+  h1 {
+    margin: 20px 0 10px;
+    color: #d1577d;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(10, 40px);
+    grid-template-rows: repeat(10, 40px);
+    gap: 2px;
+    background: #fff;
+    border: 3px solid #d1577d;
+    border-radius: 10px;
+    width: 420px;
+    height: 420px;
+    user-select: none;
+    position: relative;
+  }
+  .cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: #ffe7f0;
+    border-radius: 5px;
+    position: relative;
+    padding: 2px;
+    overflow: visible;
+  }
+  .snake {
+    background: #ffb6b6;
+  }
+  .ladder {
+    background: #c6f7d0;
+  }
+  .players-container {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .player-pion {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .player1 {
+    background-color: #e94e77;
+    box-shadow: 0 0 6px #e94e77aa;
+  }
+  .player2 {
+    background-color: #53acd9;
+    box-shadow: 0 0 6px #53acd9aa;
+  }
+  #info {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  #dice {
+    margin-top: 15px;
+    background-color: #d1577d;
+    border: none;
+    color: white;
+    font-size: 24px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+  }
+  #dice[disabled] {
+    background-color: #a983a6;
+    cursor: not-allowed;
+  }
+  #resetButton {
+    margin-top: 10px;
+    background-color: #53acd9;
+    border: none;
+    color: white;
+    font-size: 16px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+  }
+  #questionPopup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background-color: #fff0f6;
+    border: 2px solid #d1577d;
+    border-radius: 12px;
+    width: 90vw;
+    max-width: 360px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    padding: 22px 20px;
+    z-index: 1001;
+    transition: transform 0.3s ease;
+  }
+  #questionPopup.visible {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  #questionText {
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: #7d344a;
+  }
+  #closeQuestionBtn {
+    background-color: #d1577d;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    font-size: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.03em;
+  }
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0,0,0,0.35);
+    display: none;
+    z-index: 1000;
+  }
+  #overlay.visible {
+    display: block;
+  }
+  @media (max-width: 480px) {
+    #board {
+      width: 320px;
+      height: 320px;
+      grid-template-columns: repeat(10, 30px);
+      grid-template-rows: repeat(10, 30px);
+      gap: 1.5px;
+    }
+    .cell {
+      font-size: 9px;
+    }
+    .player-pion {
+      width: 12px;
+      height: 12px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Ular Tangga untuk Pasangan LDR</h1>
+<div id="board" aria-label="Papan ular tangga"></div>
+
+<div id="info" aria-live="polite" aria-atomic="true"></div>
+
+<button id="dice" aria-label="Lempar dadu, giliran pemain 1">Lempar Dadu 🎲</button>
+<button id="resetButton" aria-label="Reset permainan">Reset Game 🔄</button>
+
+<div id="overlay" role="dialog" tabindex="-1" aria-modal="true"></div>
+<div id="questionPopup" role="dialog" aria-modal="true" aria-labelledby="questionText">
+  <p id="questionText"></p>
+  <button id="closeQuestionBtn">Tutup</button>
+</div>
+
+<script>
+  const board = document.getElementById('board');
+  const diceButton = document.getElementById('dice');
+  const resetButton = document.getElementById('resetButton');
+  const info = document.getElementById('info');
+  const questionPopup = document.getElementById('questionPopup');
+  const questionText = document.getElementById('questionText');
+  const closeQuestionBtn = document.getElementById('closeQuestionBtn');
+  const overlay = document.getElementById('overlay');
+
+  const snakes = {
+    16: 6,
+    47: 26,
+    49: 11,
+    56: 53,
+    62: 19,
+    64: 60,
+    87: 24,
+    93: 73,
+    95: 75,
+    98: 78
+  };
+  const ladders = {
+    1: 38,
+    4: 14,
+    9: 31,
+    21: 42,
+    28: 84,
+    36: 44,
+    51: 67,
+    71: 91,
+    80: 100
+  };
+
+  const questions = [
+    "Apa hal yang paling kamu rindukan dariku?",
+    "Kalau kita ketemu nanti, tempat pertama yang ingin kamu kunjungi bareng aku?",
+    "Ceritain satu kenangan kita yang bikin kamu senyum sendiri.",
+    "Bagaimana cara kamu menjaga kepercayaan di hubungan jarak jauh kita?",
+    "Apa hal kecil yang aku lakukan yang bikin kamu merasa spesial?",
+    "Apa hal yang paling kamu hargai dari hubungan kita?",
+    "Kalau kamu bisa kirim pesan ke aku sekarang, apa yang ingin kamu katakan?",
+    "Apa doa kamu untuk hubungan kita ke depannya?",
+    "Cerita lucu apa yang pernah kita alami bareng?",
+    "Hal apa yang kamu ingin kita lakukan saat next ketemu nanti?"
+  ];
+
+  let positions = [1, 1];
+  let currentPlayer = 0;
+  let gameOver = false;
+
+  // Buat papan
+  function createBoard() {
+    board.innerHTML = '';
+    let reverse = false;
+    let count = 100;
+    for(let row = 0; row < 10; row++){
+      let numbers = [];
+      for(let col = 0; col < 10; col++){
+        numbers.push(count);
+        count--;
+      }
+      if(reverse) numbers.reverse();
+      reverse = !reverse;
+      numbers.forEach(num => {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.id = 'cell-'+num;
+        cell.textContent = num;
+
+        if(snakes.hasOwnProperty(num)) cell.classList.add('snake');
+        else if(ladders.hasOwnProperty(num)) cell.classList.add('ladder');
+
+        // buat kontainer pion di tiap cell
+        const playersContainer = document.createElement('div');
+        playersContainer.classList.add('players-container');
+        cell.appendChild(playersContainer);
+
+        board.appendChild(cell);
+      });
+    }
+  }
+
+  // Update posisi pion di cell yg sesuai
+  function updatePlayerPositions() {
+    // hapus dulu pion lama
+    const playersContainers = document.querySelectorAll('.players-container');
+    playersContainers.forEach(cont => cont.innerHTML = '');
+
+    // masukkan pion ke cell posisi masing2 pemain
+    positions.forEach((pos, idx) => {
+      const cell = document.getElementById('cell-'+pos);
+      if(!cell) return;
+      const playersContainer = cell.querySelector('.players-container');
+      const pion = document.createElement('div');
+      pion.classList.add('player-pion', idx === 0 ? 'player1' : 'player2');
+      pion.setAttribute('title', `Pemain ${idx+1}`);
+      playersContainer.appendChild(pion);
+    });
+  }
+
+  function updateInfo(){
+    if(gameOver){
+      info.textContent = `🎉 Pemain ${currentPlayer+1} MENANG! 🎉`;
+      diceButton.disabled = true;
+    } else {
+      info.textContent = `Giliran Pemain ${currentPlayer+1} (Klik lempar dadu 🎲)`;
+      diceButton.disabled = false;
+      diceButton.setAttribute('aria-label', `Lempar dadu, giliran pemain ${currentPlayer+1}`);
+    }
+  }
+
+  function showQuestionPopup(question){
+    questionText.textContent = question;
+    questionPopup.classList.add('visible');
+    overlay.classList.add('visible');
+    diceButton.disabled = true;
+  }
+
+  function closePopup(){
+    questionPopup.classList.remove('visible');
+    overlay.classList.remove('visible');
+    if(!gameOver) {
+      diceButton.disabled = false;
+      updateInfo();
+    }
+  }
+
+  closeQuestionBtn.onclick = closePopup;
+  overlay.onclick = closePopup;
+
+  diceButton.onclick = () => {
+    if(gameOver) return;
+    diceButton.disabled = true;
+    let diceRoll = Math.floor(Math.random()*6) + 1;
+    info.textContent = `Pemain ${currentPlayer+1} melempar dadu dan mendapat angka ${diceRoll}.`;
+
+    let targetPos = positions[currentPlayer] + diceRoll;
+    if(targetPos > 100) targetPos = positions[currentPlayer];
+
+    let steps = [];
+    for(let i = positions[currentPlayer]+1; i <= targetPos; i++){
+      steps.push(i);
+    }
+    let stepIndex = 0;
+
+    function moveStep(){
+      if(stepIndex < steps.length){
+        positions[currentPlayer] = steps[stepIndex];
+        updatePlayerPositions();
+        stepIndex++;
+        setTimeout(moveStep, 300);
+      } else {
+        let posBeforeJump = positions[currentPlayer];
+        if(ladders.hasOwnProperty(posBeforeJump)){
+          positions[currentPlayer] = ladders[posBeforeJump];
+          info.textContent = `Pemain ${currentPlayer+1} naik tangga ke petak ${positions[currentPlayer]}!`;
+          updatePlayerPositions();
+        } else if(snakes.hasOwnProperty(posBeforeJump)){
+          positions[currentPlayer] = snakes[posBeforeJump];
+          info.textContent = `Pemain ${currentPlayer+1} tergigit ular dan turun ke petak ${positions[currentPlayer]}!`;
+          updatePlayerPositions();
+        }
+        setTimeout(() => {
+          if(positions[currentPlayer] % 7 === 0 && positions[currentPlayer] !== 0){
+            const q = questions[Math.floor(Math.random()*questions.length)];
+            showQuestionPopup(q);
+          } else {
+            nextTurn();
+          }
+        }, 600);
+      }
+    }
+    moveStep();
+  };
+
+  function nextTurn(){
+    if(gameOver) return;
+    if(positions[currentPlayer] === 100){
+      gameOver = true;
+      updateInfo();
+      return;
+    }
+    currentPlayer = (currentPlayer+1) % 2;
+    updateInfo();
+    diceButton.disabled = false;
+  }
+
+  resetButton.onclick = () => {
+    positions = [1,1];
+    currentPlayer = 0;
+    gameOver = false;
+    updatePlayerPositions();
+    updateInfo();
+    closePopup();
+  }
+
+  createBoard();
+  updatePlayerPositions();
+  updateInfo();
+
+  // Accessibility keyboard
+  diceButton.addEventListener('keydown', e => {
+    if(e.key === 'Enter' || e.key === ' '){
+      e.preventDefault(); diceButton.click();
+    }
+  });
+  resetButton.addEventListener('keydown', e => {
+    if(e.key === 'Enter' || e.key === ' '){
+      e.preventDefault(); resetButton.click();
+    }
+  });
+  closeQuestionBtn.addEventListener('keydown', e => {
+    if(e.key === 'Enter' || e.key === ' '){
+      e.preventDefault();
+      closePopup();
+    }
+  });
+</script>
+
+</body>
+</html>
